@@ -1,0 +1,10 @@
+[package]
+name = "insightface-wrapper"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ort = { version = "2.0.0-rc.10", features = ["fetch-models"] }
+image = "0.25.8"
+insightface = "0.0.3"
+ndarray = "0.16.1"
