@@ -13,12 +13,3 @@ pub(crate) fn to_tensor(image: &Rgba32FImage) -> ImageTensor {
 
     return input;
 }
-
-// Compute cosine similarity between two embeddings
-//  similarity = np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2))
-pub fn similarity(emb1: &ndarray::Array1<f32>, emb2: &ndarray::Array1<f32>) -> f32 {
-    let dot_product = emb1.dot(emb2);
-    let norm1 = emb1.dot(emb1).sqrt();
-    let norm2 = emb2.dot(emb2).sqrt();
-    dot_product / (norm1 * norm2)
-}

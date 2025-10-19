@@ -13,7 +13,7 @@ pub type ImageTensor = ndarray::Array<f32, ndarray::Dim<[usize; 4]>>;
 impl ImageBatchLoader {
     // read images from file paths and resize to specified dimensions
     pub fn read_from_path(
-        image_path: Vec<&str>,
+        image_path: &Vec<&str>,
         dimensions: (u32, u32),
     ) -> Result<Self, InsightFaceError> {
         let mut batch = Vec::new();
@@ -124,7 +124,7 @@ mod tests {
     fn test_image_loader() {
         tracing_subscriber::fmt::init();
         let path_loader =
-            ImageBatchLoader::read_from_path(IMAGE_PATHS.to_vec(), (640, 640)).unwrap();
+            ImageBatchLoader::read_from_path(&IMAGE_PATHS.to_vec(), (640, 640)).unwrap();
         let from_path_images = path_loader
             .batch
             .iter()

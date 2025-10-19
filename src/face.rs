@@ -8,15 +8,16 @@ use crate::{
 };
 
 // just a simple struct to hold detected face information (same as in insightface crate)
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DetectedFace {
+    pub face_id: uuid::Uuid, // unique identifier for the face
     pub score: f32,
     pub image_face: FaceProps, // to hold scaled face data (as per input image dimensions)
     pub orig_face: FaceProps,  // to hold original non-scaled face data (640,640) dimensions
     pub cropped_face: Rgba32FImage,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FaceProps {
     bbox: (f32, f32, f32, f32),
     keypoints: [(f32, f32); 5],
@@ -66,6 +67,7 @@ impl DetectedFace {
 
         let image_face = FaceProps { bbox, keypoints };
         DetectedFace {
+            face_id: uuid::Uuid::new_v4(),
             score: face.score,
             image_face,
             orig_face,
@@ -102,6 +104,16 @@ impl FaceDetectionModel {
         }
     }
 
+    pub fn with_detection_threshold(mut self, threshold: f32) -> Self {
+        self.detection_threshold = threshold;
+        self
+    }
+
+    pub fn with_nms_threshold(mut self, threshold: f32) -> Self {
+        self.nms_threshold = threshold;
+        self
+    }
+
     // detect faces in the given image batch loader
     pub fn detect_faces(
         &self,
@@ -125,6 +137,7 @@ impl FaceDetectionModel {
 
 #[derive(Debug)]
 pub struct FaceEmbedding {
+    pub face_id: uuid::Uuid, // unique identifier for the face
     pub vector: [f32; 512],
 }
 
@@ -149,7 +162,10 @@ impl FaceEmbeddingModel {
         for face in faces {
             let face_tensor = utils::to_tensor(&face.cropped_face);
             let embedding = insightface::calculate_embedding(&mut face_embedding, face_tensor);
-            embeddings.push(FaceEmbedding { vector: embedding });
+            embeddings.push(FaceEmbedding {
+                vector: embedding,
+                face_id: face.face_id,
+            });
         }
 
         Ok(embeddings)
@@ -200,7 +216,7 @@ mod tests {
     #[test]
     fn test_detect_faces() {
         let img_loader =
-            ImageBatchLoader::read_from_path(vec!["images/20250711_112226.jpg"], (640, 640))
+            ImageBatchLoader::read_from_path(&vec!["images/20250711_112226.jpg"], (640, 640))
                 .unwrap();
         let detector = FaceDetectionModel::default();
         let faces = detector.detect_faces(&img_loader).unwrap();
