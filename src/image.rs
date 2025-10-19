@@ -1,6 +1,6 @@
 use std::{io::Cursor, time::Instant};
 
-use image::{DynamicImage, Rgba32FImage, imageops::FilterType};
+use image::{DynamicImage, Rgb, RgbImage, Rgba32FImage, imageops::FilterType};
 
 use crate::{error::InsightFaceError, utils};
 
@@ -155,6 +155,26 @@ impl ImageWrapper {
             8 => img.rotate270(),
             _ => img,
         })
+    }
+
+    pub fn to_rgb8(image: &Rgba32FImage) -> RgbImage {
+        let output = RgbImage::from_fn(image.width(), image.height(), |i, j| {
+            let px = image.get_pixel(i, j);
+            let p = px.0;
+
+            Rgb::<u8>([
+                (p[0] * 255.0) as u8,
+                (p[1] * 255.0) as u8,
+                (p[2] * 255.0) as u8,
+            ])
+        });
+
+        output
+    }
+
+    pub fn save(&self, path: &str) -> Result<(), InsightFaceError> {
+        let rgb_image = Self::to_rgb8(&self.image);
+        rgb_image.save(path).map_err(|e| InsightFaceError::new(e))
     }
 }
 

@@ -4,7 +4,7 @@ use linfa_clustering::Dbscan;
 use crate::{error::InsightFaceError, face::FaceEmbedding, math::normalize_embeddings};
 use std::collections::HashMap;
 
-pub fn cluster_faces(
+fn cluster_faces(
     embeddings: Vec<[f32; 512]>,
     tolerance: f32,
     min_points: usize,

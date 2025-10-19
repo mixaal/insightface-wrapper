@@ -83,6 +83,13 @@ impl DetectedFace {
             && self.image_face.eq(&other.image_face, eps)
             && self.scaled_face.eq(&other.scaled_face, eps)
     }
+
+    // save cropped face to specified path
+    pub fn save_cropped_face(&self, path: &str) -> Result<(), InsightFaceError> {
+        ImageWrapper::to_rgb8(&self.cropped_face)
+            .save(path)
+            .map_err(|e| InsightFaceError::new(e))
+    }
 }
 
 pub struct FaceDetectionModel {
@@ -276,6 +283,7 @@ mod tests {
             // both loaders should produce faces with the same original image shape
             assert_eq!(face_mem.shape, (1536u32, 2048u32));
             assert_eq!(face_file.shape, (1536u32, 2048u32));
+            face_mem.save_cropped_face("cropped_face.png").unwrap();
         }
     }
 }
