@@ -86,15 +86,16 @@ impl ImageWrapper {
 
     pub fn from_memory(buffer: &[u8], dimensions: (u32, u32)) -> Result<Self, InsightFaceError> {
         let start = Instant::now();
-        let image = image::load_from_memory(buffer)
-            .map_err(|e| InsightFaceError::new(e))?
-            .to_rgba32f();
+        let image = image::load_from_memory(buffer).map_err(|e| InsightFaceError::new(e))?;
+        tracing::info!("Loaded image from memory in {:?}", start.elapsed());
+        let start = Instant::now();
+        let image = image.to_rgba32f();
         let orig_dim = image.dimensions();
-        println!("Loaded image from memory in {:?}", start.elapsed());
+        tracing::info!("Converted image into rgba32f {:?}", start.elapsed());
         let start = Instant::now();
         let resized =
             image::imageops::resize(&image, dimensions.0, dimensions.1, FilterType::CatmullRom);
-        println!("Resized image in {:?}", start.elapsed());
+        tracing::info!("Resized image in {:?}", start.elapsed());
         Ok(ImageWrapper {
             image: resized,
             orig_dimensions: orig_dim,
@@ -121,6 +122,7 @@ mod tests {
 
     #[test]
     fn test_image_loader() {
+        tracing_subscriber::fmt::init();
         let path_loader =
             ImageBatchLoader::read_from_path(IMAGE_PATHS.to_vec(), (640, 640)).unwrap();
         let from_path_images = path_loader
@@ -129,7 +131,7 @@ mod tests {
             .map(|img| img.to_tensor())
             .collect::<Vec<ImageTensor>>();
         assert_eq!(from_path_images.len(), IMAGE_PATHS.len());
-        println!("Loaded {} images from path", from_path_images.len());
+        tracing::info!("Loaded {} images from path", from_path_images.len());
         let memory_images = IMAGE_PATHS
             .iter()
             .map(|path| std::fs::read(path).unwrap())
@@ -144,7 +146,7 @@ mod tests {
             .iter()
             .map(|img| img.to_tensor())
             .collect::<Vec<ImageTensor>>();
-        println!("Loaded {} images from memory", from_memory_images.len());
+        tracing::info!("Loaded {} images from memory", from_memory_images.len());
         assert_eq!(from_memory_images.len(), IMAGE_PATHS.len());
 
         assert_eq!(from_path_images.len(), from_memory_images.len());

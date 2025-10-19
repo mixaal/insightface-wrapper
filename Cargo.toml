@@ -8,3 +8,5 @@ ort = { version = "2.0.0-rc.10", features = ["fetch-models"] }
 image = "0.25.8"
 insightface = "0.0.3"
 ndarray = "0.16.1"
+tracing-subscriber = "0.3.20"
+tracing = "0.1.41"
