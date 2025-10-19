@@ -1,6 +1,6 @@
-use std::time::Instant;
+use std::{io::Cursor, time::Instant};
 
-use image::{Rgba32FImage, imageops::FilterType};
+use image::{DynamicImage, Rgba32FImage, imageops::FilterType};
 
 use crate::{error::InsightFaceError, utils};
 
@@ -54,8 +54,8 @@ impl ImageBatchLoader {
 
 pub struct ImageWrapper {
     pub(crate) image: Rgba32FImage,
-    orig_dimensions: (u32, u32),
-    scaled_dimensions: (u32, u32),
+    pub(crate) orig_dimensions: (u32, u32),
+    pub(crate) scaled_dimensions: (u32, u32),
 }
 
 impl ImageWrapper {
@@ -68,9 +68,9 @@ impl ImageWrapper {
     }
 
     pub fn from_path(path: &str, dimensions: (u32, u32)) -> Result<Self, InsightFaceError> {
-        let image = image::open(path)
-            .map_err(|e| InsightFaceError::new(e))?
-            .to_rgba32f();
+        let mut image = image::open(path).map_err(|e| InsightFaceError::new(e))?;
+        image = Self::apply_exif_orientation_from_path(path, image)?;
+        let image = image.to_rgba32f();
         let orig_dim = image.dimensions();
         Ok(ImageWrapper {
             image: image::imageops::resize(
@@ -86,7 +86,8 @@ impl ImageWrapper {
 
     pub fn from_memory(buffer: &[u8], dimensions: (u32, u32)) -> Result<Self, InsightFaceError> {
         let start = Instant::now();
-        let image = image::load_from_memory(buffer).map_err(|e| InsightFaceError::new(e))?;
+        let mut image = image::load_from_memory(buffer).map_err(|e| InsightFaceError::new(e))?;
+        image = Self::apply_exif_orientation_from_memory(buffer, image)?;
         tracing::info!("Loaded image from memory in {:?}", start.elapsed());
         let start = Instant::now();
         let image = image.to_rgba32f();
@@ -105,6 +106,55 @@ impl ImageWrapper {
 
     pub(crate) fn to_tensor(&self) -> ImageTensor {
         utils::to_tensor(&self.image)
+    }
+
+    fn apply_exif_orientation_from_path(
+        path: &str,
+        img: DynamicImage,
+    ) -> Result<DynamicImage, InsightFaceError> {
+        let file = std::fs::File::open(path).map_err(|e| InsightFaceError::new(e))?;
+        let mut bufreader = std::io::BufReader::new(&file);
+
+        Self::apply_exif_orientation(&mut bufreader, img)
+    }
+
+    fn apply_exif_orientation_from_memory(
+        buffer: &[u8],
+        img: DynamicImage,
+    ) -> Result<DynamicImage, InsightFaceError> {
+        let mut bufreader = std::io::BufReader::new(Cursor::new(buffer));
+        Self::apply_exif_orientation(&mut bufreader, img)
+    }
+
+    fn apply_exif_orientation<R: std::io::BufRead + std::io::Seek>(
+        reader: &mut R,
+        img: DynamicImage,
+    ) -> Result<DynamicImage, InsightFaceError> {
+        let exifreader = exif::Reader::new();
+        let exif = match exifreader.read_from_container(reader) {
+            Ok(exif) => exif,
+            Err(_) => return Ok(img), // No EXIF data, return original
+        };
+
+        let orientation = match exif.get_field(exif::Tag::Orientation, exif::In::PRIMARY) {
+            Some(orientation) => match orientation.value.get_uint(0) {
+                Some(v) => v,
+                None => return Ok(img),
+            },
+            None => return Ok(img),
+        };
+
+        Ok(match orientation {
+            1 => img,
+            2 => img.fliph(),
+            3 => img.rotate180(),
+            4 => img.flipv(),
+            5 => img.rotate90().fliph(),
+            6 => img.rotate90(),
+            7 => img.rotate270().fliph(),
+            8 => img.rotate270(),
+            _ => img,
+        })
     }
 }
 
@@ -150,6 +200,23 @@ mod tests {
         assert_eq!(from_memory_images.len(), IMAGE_PATHS.len());
 
         assert_eq!(from_path_images.len(), from_memory_images.len());
-        // assert_eq!(from_path_images, from_memory_images);
+        for (i, (img1, img2)) in from_path_images
+            .iter()
+            .zip(from_memory_images.iter())
+            .enumerate()
+        {
+            tracing::info!("Comparing image tensor at index {}", i);
+            tracing::info!(" - Image from path shape: {:?}", img1.shape());
+            tracing::info!(" - Image from memory shape: {:?}", img2.shape());
+            assert_eq!(
+                img1.shape(),
+                img2.shape(),
+                "Image tensors at index {} have different shapes: {:?} vs {:?}",
+                i,
+                img1.shape(),
+                img2.shape()
+            );
+        }
+        assert_eq!(from_path_images, from_memory_images);
     }
 }

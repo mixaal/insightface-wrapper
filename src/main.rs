@@ -29,7 +29,7 @@ fn main() -> Result<(), InsightFaceError> {
     for faces_inside_pic in &faces {
         let img_name = &images[picno];
         for f in faces_inside_pic {
-            face_lookup.insert(f.face_id, (img_name, f.score));
+            face_lookup.insert(f.face_id, (img_name, f.score, f.shape));
         }
         picno += 1;
     }
@@ -46,8 +46,13 @@ fn main() -> Result<(), InsightFaceError> {
     for cluster_id in 0..labels.len() {
         tracing::info!("Cluster {cluster_id}:");
         for face in &labels[cluster_id] {
-            let (img_name, score) = face_lookup.get(&face.face_id).unwrap();
-            tracing::info!(" - Image: {}, Score: {}", img_name, score);
+            let (img_name, score, shape) = face_lookup.get(&face.face_id).unwrap();
+            tracing::info!(
+                " - Image: {}, Score: {}, shape: {:?}",
+                img_name,
+                score,
+                shape
+            );
         }
     }
     Ok(())

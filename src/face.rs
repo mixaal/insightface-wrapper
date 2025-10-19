@@ -12,9 +12,10 @@ use crate::{
 pub struct DetectedFace {
     pub face_id: uuid::Uuid, // unique identifier for the face
     pub score: f32,
-    pub image_face: FaceProps, // to hold scaled face data (as per input image dimensions)
-    pub orig_face: FaceProps,  // to hold original non-scaled face data (640,640) dimensions
+    pub image_face: FaceProps, // to hold image face data (as per input image dimensions)
+    pub scaled_face: FaceProps, // to hold scaled face data (640,640) dimensions
     pub cropped_face: Rgba32FImage,
+    pub shape: (u32, u32), // original image dimensions
 }
 
 #[derive(Debug, Clone)]
@@ -44,7 +45,7 @@ impl FaceProps {
 impl DetectedFace {
     fn from_face(face: &insightface::Face, img: &ImageWrapper) -> Self {
         let cropped_face = insightface::crop_face(&img.image, &face.keypoints, 112);
-        let orig_face = FaceProps {
+        let scaled_face = FaceProps {
             bbox: face.bbox,
             keypoints: face.keypoints,
         };
@@ -70,8 +71,9 @@ impl DetectedFace {
             face_id: uuid::Uuid::new_v4(),
             score: face.score,
             image_face,
-            orig_face,
+            scaled_face,
             cropped_face,
+            shape: img.orig_dimensions,
         }
     }
 
@@ -79,7 +81,7 @@ impl DetectedFace {
     pub fn eq(&self, other: &DetectedFace, eps: f32) -> bool {
         (self.score - other.score).abs() < eps
             && self.image_face.eq(&other.image_face, eps)
-            && self.orig_face.eq(&other.orig_face, eps)
+            && self.scaled_face.eq(&other.scaled_face, eps)
     }
 }
 
@@ -244,7 +246,36 @@ mod tests {
             ],
         );
         // one way or another, the order of detected faces may vary
-        assert!(faces[0][0].orig_face.eq(&edita, 1e-2) || faces[0][1].orig_face.eq(&edita, 1e-2));
-        assert!(faces[0][0].orig_face.eq(&michal, 1e-2) || faces[0][1].orig_face.eq(&michal, 1e-2));
+        assert!(
+            faces[0][0].scaled_face.eq(&edita, 1e-2) || faces[0][1].scaled_face.eq(&edita, 1e-2)
+        );
+        assert!(
+            faces[0][0].scaled_face.eq(&michal, 1e-2) || faces[0][1].scaled_face.eq(&michal, 1e-2)
+        );
+    }
+
+    #[test]
+    fn test_detected_face_orientation() {
+        let img_data = std::fs::read("images/20250716_154632.jpg").unwrap();
+
+        let img_loader =
+            ImageBatchLoader::read_from_path(&vec!["images/20250716_154632.jpg"], (640, 640))
+                .unwrap();
+        let img_mem_loader =
+            ImageBatchLoader::read_from_memory(vec![&img_data], (640, 640)).unwrap();
+        let detector = FaceDetectionModel::default();
+        let faces_from_file = detector.detect_faces(&img_loader).unwrap();
+        let faces_from_mem = detector.detect_faces(&img_mem_loader).unwrap();
+        assert_eq!(faces_from_file.len(), 1);
+        assert_eq!(faces_from_file[0].len(), 1); // expecting 1 faces in the image
+
+        assert_eq!(faces_from_mem.len(), 1);
+        assert_eq!(faces_from_mem[0].len(), 1); // expecting 1 faces in the image
+
+        for (face_file, face_mem) in faces_from_file[0].iter().zip(faces_from_mem[0].iter()) {
+            // both loaders should produce faces with the same original image shape
+            assert_eq!(face_mem.shape, (1536u32, 2048u32));
+            assert_eq!(face_file.shape, (1536u32, 2048u32));
+        }
     }
 }
